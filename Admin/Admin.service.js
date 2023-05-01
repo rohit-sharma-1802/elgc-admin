@@ -99,10 +99,14 @@ module.exports = {
   },
 
   supplierEmails: (getSupplierEmailsCallback) => {
-    pool.query(`Select email from Supplier`, [], (err, results, fields) => {
-      if (err) return getSupplierEmailsCallback(err);
-      return getSupplierEmailsCallback(null, results);
-    });
+    pool.query(
+      `Select email,supplierId from Supplier`,
+      [],
+      (err, results, fields) => {
+        if (err) return getSupplierEmailsCallback(err);
+        return getSupplierEmailsCallback(null, results);
+      }
+    );
   },
 
   deleteSupplier: (supplierId, deleteSupplierCallback) => {
@@ -131,6 +135,17 @@ module.exports = {
       (err, results, fields) => {
         if (err) updateSupplierDetailsCallback(err);
         updateSupplierDetailsCallback(null, results);
+      }
+    );
+  },
+
+  updateEmailStatus: (data, updateEmailStatusCallback) => {
+    pool.query(
+      `Insert into SupplierQuote(supplierId,projectId,status) values(?,?,?)`,
+      [data.supplierId, data.projectId, "Email Sent"],
+      (err, results, fields) => {
+        if (err) return updateEmailStatusCallback(err);
+        return updateEmailStatusCallback(null, results);
       }
     );
   },

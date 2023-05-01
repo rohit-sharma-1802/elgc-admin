@@ -9,8 +9,10 @@ const {
   supplierEmails,
   deleteSupplier,
   updateSupplier,
+  updateEmailStatus,
 } = require("./Admin.service");
 const fs = require("fs");
+const nodemailer = require("nodemailer");
 
 module.exports = {
   checkLogin: (req, res) => {
@@ -71,6 +73,7 @@ module.exports = {
       return res.status(200).json({
         success: 1,
         message: "Added Successfully",
+        materials: results,
       });
     });
   },
@@ -187,7 +190,7 @@ module.exports = {
       }
       return res.status(200).json({
         success: 1,
-        emails: results,
+        details: results,
       });
     });
   },
@@ -236,6 +239,63 @@ module.exports = {
         success: 1,
         message: "Updated Record Successfully",
       });
+    });
+  },
+
+  sentEmail: (req, res) => {
+    const { projectId, emailDetails } = req.body;
+    let transporter = nodemailer.createTransport({
+      service: "gmail",
+      host: "smtp.gmail.com",
+      auth: {
+        user: "",
+        pass: "",
+      },
+    });
+
+    const messages = emailDetails.map((details) => {
+      return {
+        from: "",
+        to: details.email,
+        subject: "Apply for Quote",
+        html: `<p>Hi,</p><p>Your Project ID is: <strong>${projectId}</strong></p>
+            <p>Your  Supplier ID is: <strong>${details.supplierId}</strong></p>`,
+      };
+    });
+
+    messages.forEach((message, index) => {
+      transporter.sendMail(message, (error, info) => {
+        if (error) {
+          console.log("Error sending email:", error);
+          return res.status(500).json({
+            success: 0,
+            message: "Bad Request",
+            index: index,
+          });
+        } else {
+          updateEmailStatus(
+            { projectId, supplierId: emailDetails[index].supplierId },
+            (err, results) => {
+              if (err) {
+                return res.status(500).json({
+                  success: 0,
+                  message: "Bad Request",
+                  index: index,
+                });
+              }
+            }
+          );
+        }
+      });
+      if (index === emailDetails.length - 1)
+        return res.status(200).json({
+          success: 1,
+          message: "Mail Sent Successfully",
+        });
+    });
+    return res.status(500).json({
+      success: 0,
+      message: "Bad Request",
     });
   },
 };

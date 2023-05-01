@@ -10,6 +10,7 @@ const {
   getSupplierEmails,
   deleteSupplierDetails,
   updateSupplierDetails,
+  sentEmail,
 } = require("./Admin.controller");
 
 const router = require("express").Router();
@@ -25,5 +26,6 @@ router.get("/getSupplierCompanyFile/:fileName", getSupplierCompanyFile);
 router.get("/getSupplierEmails", getSupplierEmails);
 router.post("/deleteSupplierDetails", deleteSupplierDetails);
 router.put("/updateSupplierDetails", updateSupplierDetails);
+router.post("/sentEmails", sentEmail);
 
 module.exports = router;
