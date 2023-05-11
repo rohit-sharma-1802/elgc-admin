@@ -14,14 +14,13 @@ module.exports = {
 
   addProjectRequisition: (data, addRequisitionCallback) => {
     pool.query(
-      `Insert into Project(projectId, toName, name, subject, remarks, requisitionId, status) values(?,?,?,?,?,?,?)`,
+      `Insert into Project(projectId, toName, name, subject, remarks, status) values(?,?,?,?,?,?)`,
       [
         data.projectId,
         data.toName,
         data.name,
         data.subject,
         data.remarks,
-        data.requisitionId,
         "Pending",
       ],
       (err, results, fields) => {
@@ -33,13 +32,13 @@ module.exports = {
 
   addMaterialsDetails: (data, addMaterialDetailsCallback) => {
     pool.query(
-      `Insert into Requisitions(description, size, quantity, requisitionId) values ?`,
+      `Insert into Requisitions(description, size, quantity, projectId) values ?`,
       [
-        data.map((requisition) => [
+        data.materials.map((requisition) => [
           requisition.description,
           requisition.size,
           requisition.quantity,
-          requisition.requisitionId,
+          data.projectId,
         ]),
       ],
       (err, results, fields) => {
@@ -52,7 +51,7 @@ module.exports = {
   updateStatus: (data, updateStatusCallback) => {
     pool.query(
       `Update Project set status = ? where projectId = ? `,
-      [data.status, data.projectId],
+      ["Approved", data.projectId],
       (err, results, fields) => {
         if (err) return updateStatusCallback(err);
         return updateStatusCallback(null, results);
@@ -62,11 +61,33 @@ module.exports = {
 
   getRequisitions: (data, getAllRequisitionsCallback) => {
     pool.query(
-      `Select * From Project,Requisitions where Project.requisitionId=? and Requisitions.requisitionId=?`,
-      [data.requisitionId, data.requisitionId],
+      `Select * From Requisitions where projectId = ?`,
+      [data.projectId],
       (err, results, fields) => {
         if (err) return getAllRequisitionsCallback(err);
         return getAllRequisitionsCallback(null, results);
+      }
+    );
+  },
+
+  getAllRequisitionDetails: (data, getAllRequisitionsDataCallback) => {
+    pool.query(
+      `Select * From Project where status In(?)`,
+      [data.status],
+      (err, results, fields) => {
+        if (err) getAllRequisitionsDataCallback(err);
+        return getAllRequisitionsDataCallback(null, results);
+      }
+    );
+  },
+
+  deleteRequisitionService: (data, deleteRequisitionCallback) => {
+    pool.query(
+      `Delete From Project where projectId = ?`,
+      [data.projectId],
+      (err, results, fields) => {
+        if (err) deleteRequisitionCallback(err);
+        deleteRequisitionCallback(null, results);
       }
     );
   },
@@ -99,14 +120,10 @@ module.exports = {
   },
 
   supplierEmails: (getSupplierEmailsCallback) => {
-    pool.query(
-      `Select email,supplierId from Supplier`,
-      [],
-      (err, results, fields) => {
-        if (err) return getSupplierEmailsCallback(err);
-        return getSupplierEmailsCallback(null, results);
-      }
-    );
+    pool.query(`Select email from Supplier`, [], (err, results, fields) => {
+      if (err) return getSupplierEmailsCallback(err);
+      return getSupplierEmailsCallback(null, results);
+    });
   },
 
   deleteSupplier: (supplierId, deleteSupplierCallback) => {
@@ -122,7 +139,8 @@ module.exports = {
 
   updateSupplier: (data, updateSupplierDetailsCallback) => {
     pool.query(
-      `Update Supplier set name = ?, email = ?, phone = ?, company_name = ?, country_name = ?, address=? where supplierId = ?`,
+      `Update Supplier set name = ?, email = ?, phone = ?, company_name = ?, country_name = ?, address=? 
+      where supplierId = ?`,
       [
         data.name,
         data.email,
@@ -139,13 +157,159 @@ module.exports = {
     );
   },
 
-  updateEmailStatus: (data, updateEmailStatusCallback) => {
+  getSupplier: (supplierId, getSupplierCallback) => {
     pool.query(
-      `Insert into SupplierQuote(supplierId,projectId,status) values(?,?,?)`,
-      [data.supplierId, data.projectId, "Email Sent"],
+      `Select * from Supplier where supplierId = ?`,
+      [supplierId],
       (err, results, fields) => {
-        if (err) return updateEmailStatusCallback(err);
-        return updateEmailStatusCallback(null, results);
+        if (err) return getSupplierCallback(err);
+        return getSupplierCallback(null, results);
+      }
+    );
+  },
+
+  supplierQuoteDetailsService: (
+    data,
+    supplierQuoteDetailsControllerCallback
+  ) => {
+    pool.query(
+      `Insert into SupplierQuote(name,email,company,country,address,message,mobile) values(?,?,?,?,?,?,?)`,
+      [
+        data.name,
+        data.email,
+        data.company,
+        data.country,
+        data.address,
+        data.message,
+        data.mobile,
+      ],
+      (err, results, fields) => {
+        if (err) return supplierQuoteDetailsControllerCallback(err);
+        console.log(results);
+        return supplierQuoteDetailsControllerCallback(null, results.insertId);
+      }
+    );
+  },
+
+  submitQuoteService: (data, submitQuoteControllerCallback) => {
+    pool.query(
+      `Insert into SupplierQuoteDetails(itemId,id,unitPrice,projectId) values ?`,
+      [
+        data.quote.map((details) => [
+          details.itemId,
+          details.id,
+          details.unitPrice,
+          details.projectId,
+        ]),
+      ],
+      (err, results, fields) => {
+        if (err) return submitQuoteControllerCallback(err);
+        return submitQuoteControllerCallback(null);
+      }
+    );
+  },
+
+  quotationProjectService: (quotationProjectCallback) => {
+    pool.query(
+      `Select projectId,name,subject,status from Project where projectId In
+      (Select distinct projectId from supplierquotedetails)`,
+      [],
+      (err, results, fields) => {
+        if (err) return quotationProjectCallback(err);
+        return quotationProjectCallback(null, results);
+      }
+    );
+  },
+
+  quotationItemService: (data, quotationItemCallback) => {
+    pool.query(
+      `Select requisitions.itemId as itemId, id, description, quantity, size, unitPrice from 
+        supplierquotedetails,requisitions 
+        where supplierquotedetails.projectId = ? and requisitions.itemId = supplierquotedetails.itemId 
+        order by id desc`,
+      [data.projectId],
+      (err, results, fields) => {
+        if (err) quotationItemCallback(err);
+        quotationItemCallback(null, results);
+      }
+    );
+  },
+
+  companyDetailsService: (data, companyDetailsCallback) => {
+    pool.query(
+      `Select * From SupplierQuote where id = ?`,
+      [data.id],
+      (err, results, fields) => {
+        if (err) return companyDetailsCallback(err);
+        return companyDetailsCallback(err, results);
+      }
+    );
+  },
+
+  createOrderService: (data, createOrderCallback) => {
+    pool.query(
+      `Insert into Orders(id) values(?)`,
+      [data.id],
+      (err, results, fields) => {
+        if (err) return createOrderCallback(err);
+        return createOrderCallback(null, results);
+      }
+    );
+  },
+
+  orderDetailsService: (data, orderDetailsCallback) => {
+    pool.query(
+      `Insert into OrderDetails(description,quantity,size,unitPrice,orderId,itemId) values ?`,
+      [
+        data.materials.map((requisition) => [
+          requisition.description,
+          requisition.quantity,
+          requisition.size,
+          requisition.unitPrice,
+          data.orderId,
+          requisition.itemId,
+        ]),
+      ],
+      (err, results, fields) => {
+        if (err) return orderDetailsCallback(err);
+        return orderDetailsCallback(null, results);
+      }
+    );
+  },
+
+  getOrdersService: (orderCallback) => {
+    pool.query(
+      `Select orderId,orderTime,name,email,company,mobile,address,message,country,orders.id from orders,
+      (Select * from supplierquote) as temp 
+      where orderId In (Select distinct(orderId) from orderdetails) and temp.id = orders.id
+      `,
+      [],
+      (err, results, fields) => {
+        if (err) return orderCallback(err);
+        return orderCallback(null, results);
+      }
+    );
+  },
+
+  getprojectOrderService: (data, quotationProjectCallback) => {
+    pool.query(
+      `Select * from Project where projectId In
+      (Select distinct projectId from supplierquotedetails where id = ?)`,
+      [data.id],
+      (err, results, fields) => {
+        if (err) return quotationProjectCallback(err);
+        return quotationProjectCallback(null, results);
+      }
+    );
+  },
+
+  getOrderMaterialService: (data, getMaterialsCallback) => {
+    pool.query(
+      `Select * From OrderDetails where orderId = ?`,
+      [data.orderId],
+      (err, results, fields) => {
+        if (err) return getMaterialsCallback(err);
+        return getMaterialsCallback(null, results);
       }
     );
   },
